@@ -16,118 +16,122 @@ import es.degrassi.mmreborn.common.util.ItemSlot;
 @Mixin(IOInventory.class)
 public abstract class IOInventoryMixin {
 
-    // @Overwrite
-    // public static IOInventory mergeBuild(IOInventory... inventories)
-    // {
-    //     int totalSlotsCount = 0;
-    //     int totalInputsCount = 0;
-    //     int totalOutputsCount = 0;
-        
-    //     int totalInSize = 0;
-    //     int totalOutSize = 0;
-    //     int totalMiscSize = 0;
-    //     int totalStackLimit = 0;
+     /**
+      * @author
+      * @reason
+      */
+     @Overwrite
+     public static IOInventory mergeBuild(IOInventory... inventories)
+     {
+         int totalSlotsCount = 0;
+         int totalInputsCount = 0;
+         int totalOutputsCount = 0;
 
-    //     for(IOInventory inv : inventories)
-    //     {
-    //         IOInventoryAccessor access = (IOInventoryAccessor) inv;
-    //         totalSlotsCount += inv.getInventory().size();
-    //         totalInputsCount += inv.getInputs().size();
-    //         totalOutputsCount += inv.getOutputs().size();
-    //         totalInSize += access.getInSlots().length;
-    //         totalOutSize += access.getOutSlots().length;
-    //         totalMiscSize += access.getMiscSlots().length;
-    //         totalStackLimit += inv.getSlotLimit();
-    //     }
+         int totalInSize = 0;
+         int totalOutSize = 0;
+         int totalMiscSize = 0;
+         int totalStackLimit = 0;
 
-    //     IOInventory merged = IOInventoryAccessor.create(totalSlotsCount);
-    //     IOInventoryAccessor mergedAccess = (IOInventoryAccessor) merged;
+         for(IOInventory inv : inventories)
+         {
+             IOInventoryAccessor access = (IOInventoryAccessor) inv;
+             totalSlotsCount += inv.getInventory().size();
+             totalInputsCount += inv.getInputs().size();
+             totalOutputsCount += inv.getOutputs().size();
+             totalInSize += access.getInSlots().length;
+             totalOutSize += access.getOutSlots().length;
+             totalMiscSize += access.getMiscSlots().length;
+             totalStackLimit += inv.getSlotLimit();
+         }
 
-    //     List<ItemSlot> mergedInventory = merged.getInventory();
-    //     List<ItemSlot> mergedInputs = merged.getInputs();
-    //     List<ItemSlot> mergedOutputs = merged.getOutputs();
+         IOInventory merged = IOInventoryAccessor.create(totalSlotsCount);
+         IOInventoryAccessor mergedAccess = (IOInventoryAccessor) merged;
 
-    //     if(mergedInventory instanceof ArrayList) {
-    //         ((ArrayList<?>) mergedInventory).ensureCapacity(totalSlotsCount);
-    //     }
-    //     if (mergedInputs instanceof ArrayList) {
-    //         ((ArrayList<?>) mergedInputs).ensureCapacity(totalInputsCount);
-    //     }
-    //     if (mergedOutputs instanceof ArrayList) {
-    //         ((ArrayList<?>) mergedOutputs).ensureCapacity(totalOutputsCount);
-    //     }
+         List<ItemSlot> mergedInventory = merged.getInventory();
+         List<ItemSlot> mergedInputs = merged.getInputs();
+         List<ItemSlot> mergedOutputs = merged.getOutputs();
 
-    //     int[] mergedInSlots = new int[totalInSize];
-    //     int[] mergedOutSlots = new int[totalOutSize];
-    //     int[] mergedMiscSlots = new int[totalMiscSize];
-        
-    //     int[] slotOwnerIndex = new int[totalSlotsCount]; 
-    //     int[] offsets = new int[inventories.length]; 
-    //     int commonSidesMask = 0x3F; 
+         if(mergedInventory instanceof ArrayList) {
+             ((ArrayList<?>) mergedInventory).ensureCapacity(totalSlotsCount);
+         }
+         if (mergedInputs instanceof ArrayList) {
+             ((ArrayList<?>) mergedInputs).ensureCapacity(totalInputsCount);
+         }
+         if (mergedOutputs instanceof ArrayList) {
+             ((ArrayList<?>) mergedOutputs).ensureCapacity(totalOutputsCount);
+         }
 
-    //     int currentSlotOffset = 0;
-    //     int inIndex = 0;
-    //     int outIndex = 0;
-    //     int miscIndex = 0;
-        
-    //     for(int i = 0; i < inventories.length; i++)
-    //     {
-    //         IOInventory inv = inventories[i];
-    //         IOInventoryAccessor access = (IOInventoryAccessor) inv;
-    //         int invSize = inv.getInventory().size();
+         int[] mergedInSlots = new int[totalInSize];
+         int[] mergedOutSlots = new int[totalOutSize];
+         int[] mergedMiscSlots = new int[totalMiscSize];
 
-    //         offsets[i] = currentSlotOffset;
-    //         Arrays.fill(slotOwnerIndex, currentSlotOffset, currentSlotOffset + invSize, i);
+         int[] slotOwnerIndex = new int[totalSlotsCount];
+         int[] offsets = new int[inventories.length];
+         int commonSidesMask = 0x3F;
 
-    //         mergedInventory.addAll(inv.getInventory());
-    //         mergedInputs.addAll(inv.getInputs());
-    //         mergedOutputs.addAll(inv.getOutputs());
+         int currentSlotOffset = 0;
+         int inIndex = 0;
+         int outIndex = 0;
+         int miscIndex = 0;
 
-    //         int[] srcIn = access.getInSlots();
-    //         for(int val : srcIn) mergedInSlots[inIndex++] = val + currentSlotOffset;
+         for(int i = 0; i < inventories.length; i++)
+         {
+             IOInventory inv = inventories[i];
+             IOInventoryAccessor access = (IOInventoryAccessor) inv;
+             int invSize = inv.getInventory().size();
 
-    //         int[] srcOut = access.getOutSlots();
-    //         for(int val : srcOut) mergedOutSlots[outIndex++] = val + currentSlotOffset;
+             offsets[i] = currentSlotOffset;
+             Arrays.fill(slotOwnerIndex, currentSlotOffset, currentSlotOffset + invSize, i);
 
-    //         int[] srcMisc = access.getMiscSlots();
-    //         for(int val : srcMisc) mergedMiscSlots[miscIndex++] = val + currentSlotOffset;
+             mergedInventory.addAll(inv.getInventory());
+             mergedInputs.addAll(inv.getInputs());
+             mergedOutputs.addAll(inv.getOutputs());
 
-    //         int currentInvMask = 0;
-    //         for(Direction d : access.getAccessibleSides())
-    //         {
-    //             currentInvMask |= (1 << d.ordinal());
-    //         }
-    //         commonSidesMask &= currentInvMask;
+             int[] srcIn = access.getInSlots();
+             for(int val : srcIn) mergedInSlots[inIndex++] = val + currentSlotOffset;
 
-    //         currentSlotOffset += invSize;
-    //     }
+             int[] srcOut = access.getOutSlots();
+             for(int val : srcOut) mergedOutSlots[outIndex++] = val + currentSlotOffset;
 
-    //     List<Direction> finalSides = new ArrayList<>(6);
-    //     for(Direction d : Direction.values())
-    //     {
-    //         if((commonSidesMask & (1 << d.ordinal())) != 0)
-    //         {
-    //             finalSides.add(d);
-    //         }
-    //     }
+             int[] srcMisc = access.getMiscSlots();
+             for(int val : srcMisc) mergedMiscSlots[miscIndex++] = val + currentSlotOffset;
 
-    //     mergedAccess.setInSlots(mergedInSlots);
-    //     mergedAccess.setOutSlots(mergedOutSlots);
-    //     mergedAccess.setMiscSlots(mergedMiscSlots);
-    //     mergedAccess.setAccessibleSides(finalSides);
-    //     mergedAccess.setSlotLimitField(totalStackLimit);
+             int currentInvMask = 0;
+             for(Direction d : access.getAccessibleSides())
+             {
+                 currentInvMask |= (1 << d.ordinal());
+             }
+             commonSidesMask &= currentInvMask;
 
-    //     merged.setListener((slot, stack) -> {
-    //         if (slot < 0 || slot >= slotOwnerIndex.length) return;
-    //         int ownerInvIndex = slotOwnerIndex[slot];
-    //         IOInventory targetInv = inventories[ownerInvIndex];
-    //         IOInventoryChangedListener subListener = ((IOInventoryAccessor) targetInv).getListener();
-    //         if(subListener != null)
-    //         {
-    //             subListener.onChange(slot - offsets[ownerInvIndex], stack);
-    //         }
-    //     });
+             currentSlotOffset += invSize;
+         }
 
-    //     return merged;
-    // }
+         List<Direction> finalSides = new ArrayList<>(6);
+         for(Direction d : Direction.values())
+         {
+             if((commonSidesMask & (1 << d.ordinal())) != 0)
+             {
+                 finalSides.add(d);
+             }
+         }
+
+         mergedAccess.setInSlots(mergedInSlots);
+         mergedAccess.setOutSlots(mergedOutSlots);
+         mergedAccess.setMiscSlots(mergedMiscSlots);
+         mergedAccess.setAccessibleSides(finalSides);
+         mergedAccess.setSlotLimitField(totalStackLimit);
+
+         merged.setListener((slot, stack) -> {
+             if (slot < 0 || slot >= slotOwnerIndex.length) return;
+             int ownerInvIndex = slotOwnerIndex[slot];
+             IOInventory targetInv = inventories[ownerInvIndex];
+             IOInventoryChangedListener subListener = ((IOInventoryAccessor) targetInv).getListener();
+             if(subListener != null)
+             {
+                 subListener.onChange(slot - offsets[ownerInvIndex], stack);
+             }
+         });
+
+         return merged;
+     }
 }

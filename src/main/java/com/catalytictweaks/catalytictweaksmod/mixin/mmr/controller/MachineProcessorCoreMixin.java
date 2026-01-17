@@ -27,7 +27,7 @@ public abstract class MachineProcessorCoreMixin implements MachineProcessorCoreA
     @Shadow private Component error;
     @Shadow private float recipeProgressTime;
     @Shadow private int recipeTotalTime;
-    @Shadow @Final private CraftingContext context;
+    @Shadow private CraftingContext context;
     @Shadow private boolean isLastRecipeTick;
     @Shadow @Final private MachineRecipeFinder recipeFinder;
     @Shadow @Final private MachineControllerEntity tile;
@@ -42,6 +42,10 @@ public abstract class MachineProcessorCoreMixin implements MachineProcessorCoreA
     @Shadow public abstract void setRecipe(RecipeHolder<MachineRecipe> recipe);
 
 
+    /**
+     * @author
+     * @reason
+     */
     @Overwrite
     public void tick()
     {

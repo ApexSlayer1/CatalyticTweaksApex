@@ -8,6 +8,9 @@
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/CatalyticTweaks.iml" filepath="$PROJECT_DIR$/.idea/modules/CatalyticTweaks.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/CatalyticTweaks.main.iml" filepath="$PROJECT_DIR$/.idea/modules/CatalyticTweaks.main.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/CatalyticTweaks.test.iml" filepath="$PROJECT_DIR$/.idea/modules/CatalyticTweaks.test.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/CatalyticTweaksApex.iml" filepath="$PROJECT_DIR$/.idea/modules/CatalyticTweaksApex.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/CatalyticTweaksApex.main.iml" filepath="$PROJECT_DIR$/.idea/modules/CatalyticTweaksApex.main.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/CatalyticTweaksApex.test.iml" filepath="$PROJECT_DIR$/.idea/modules/CatalyticTweaksApex.test.iml" />
     </modules>
   </component>
 </project>

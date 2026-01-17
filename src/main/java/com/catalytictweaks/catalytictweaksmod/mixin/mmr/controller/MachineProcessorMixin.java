@@ -28,6 +28,10 @@ public abstract class MachineProcessorMixin {
 
     @Unique private int globalRecipeCooldown = 0;
 
+    /**
+     * @author
+     * @reason
+     */
     @Overwrite
     public void tick()
     {
@@ -49,7 +53,7 @@ public abstract class MachineProcessorMixin {
             if(found.isPresent())
             {
                 RecipeHolder<MachineRecipe> recipe = found.get();
-                
+
                 for(MachineProcessorCore core : cores)
                 {
                     if(core.hasActiveRecipe()) continue;
@@ -71,8 +75,8 @@ public abstract class MachineProcessorMixin {
 
         this.cores.forEach(MachineProcessorCore::tick);
 
-        if(this.tile.getStatus() != MachineStatus.IDLE && 
-           this.cores.stream().noneMatch(MachineProcessorCore::hasActiveRecipe) && 
+        if(this.tile.getStatus() != MachineStatus.IDLE &&
+           this.cores.stream().noneMatch(MachineProcessorCore::hasActiveRecipe) &&
            !this.tile.getStatus().isMissingStructure())
         {
             this.tile.setStatus(MachineStatus.IDLE);
