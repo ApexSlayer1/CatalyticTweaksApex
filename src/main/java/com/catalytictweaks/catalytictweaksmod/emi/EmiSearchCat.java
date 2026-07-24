@@ -197,6 +197,9 @@ public class EmiSearchCat
         }
         finally
         {
+            TOKEN_CACHE.clear();
+            MOD_NAME_CACHE.clear();
+            
             customPool.shutdown();
             customPool.close();
             bakingExecutor.shutdown();
@@ -321,7 +324,7 @@ public class EmiSearchCat
     private static void addToken(String line, int start, int end, Set<String> tokensSet)
     {
         int len = end - start;
-        if (len >= 2)
+        if (len >= 4)
         {
             boolean isNumber = true;
             for (int i = start; i < end; i++)
@@ -336,7 +339,10 @@ public class EmiSearchCat
             if (!isNumber)
             {
                 String rawToken = line.substring(start, end).toLowerCase(Locale.ROOT);
-                tokensSet.add(TOKEN_CACHE.computeIfAbsent(rawToken, k -> k));
+                if(!rawToken.startsWith("§")) 
+                {
+                    tokensSet.add(TOKEN_CACHE.computeIfAbsent(rawToken, k -> k));
+                }
             }
         }
     }

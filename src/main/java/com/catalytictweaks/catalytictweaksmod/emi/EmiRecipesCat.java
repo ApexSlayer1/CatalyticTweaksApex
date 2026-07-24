@@ -22,6 +22,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -195,6 +196,12 @@ public class EmiRecipesCat
         setupSafeLookup();
 
         List<EmiRecipe> recipes = (List<EmiRecipe>)RECIPES_FIELD.get(null);
+        if(recipes != null)
+        {
+            recipes.clear();
+            if(recipes instanceof ArrayList<?> arr) arr.trimToSize();
+        }
+
         Map<EmiRecipeCategory, List<EmiIngredient>> workstations = (Map<EmiRecipeCategory, List<EmiIngredient>>)WORKSTATIONS_FIELD.get(null);
 
         List<EmiRecipeCategory> categories = EmiRecipes.categories;
@@ -276,11 +283,19 @@ public class EmiRecipesCat
             }
         });
 
+        Map<List<EmiRecipe>, List<EmiRecipe>> listInterner = new ConcurrentHashMap<>(16384);
+        Function<Set<EmiRecipe>, List<EmiRecipe>> listDeduplicator = set -> {
+            List<EmiRecipe> list = List.copyOf(set);
+            return listInterner.computeIfAbsent(list, k -> k);
+        };
+
         Map<EmiStack, List<EmiRecipe>> finalByInput = new Object2ObjectOpenCustomHashMap<>(inputAccumulator.size(), strategy);
-        inputAccumulator.forEach((wrapper, set) -> finalByInput.put(wrapper.stack, List.copyOf(set)));
+        inputAccumulator.forEach((wrapper, set) -> finalByInput.put(wrapper.stack, listDeduplicator.apply(set)));
 
         Map<EmiStack, List<EmiRecipe>> finalByOutput = new Object2ObjectOpenCustomHashMap<>(outputAccumulator.size(), strategy);
-        outputAccumulator.forEach((wrapper, set) -> finalByOutput.put(wrapper.stack, List.copyOf(set)));
+        outputAccumulator.forEach((wrapper, set) -> finalByOutput.put(wrapper.stack, listDeduplicator.apply(set)));
+
+        listInterner.clear();
 
         populateWorkstationMap(byCategory, filteredWorkstations);
 
@@ -295,6 +310,9 @@ public class EmiRecipesCat
         MANAGER_BY_ID.set(customManager, byId);
 
         EmiRecipes.manager = customManager;
+        if(recipes instanceof ArrayList<?> arr) arr.trimToSize();
+        if(EmiRecipes.categories instanceof ArrayList<?> arr) arr.trimToSize();
+        if(EmiRecipes.invalidators instanceof ArrayList<?> arr) arr.trimToSize();
 
         SET_WORKER_METHOD.invoke(null, (Object)null);
 
@@ -383,6 +401,9 @@ public class EmiRecipesCat
         Map<EmiRecipeCategory, List<EmiIngredient>> filteredWorkstations)
     {
         Map<EmiStack, List<EmiRecipe>> workstationMap = EmiRecipes.byWorkstation;
+        
+        Map<List<EmiRecipe>, List<EmiRecipe>> listInterner = new HashMap<>();
+
         for(Map.Entry<EmiRecipeCategory, List<EmiRecipe>> entry : byCategory.entrySet())
         {
             List<EmiIngredient> ingredients = filteredWorkstations.get(entry.getKey());
@@ -391,13 +412,17 @@ public class EmiRecipesCat
                 continue;
             }
 
+            List<EmiRecipe> deduplicatedList = listInterner.computeIfAbsent(
+                List.copyOf(entry.getValue()), k -> k
+            );
+
             for(EmiIngredient ingredient : ingredients)
             {
                 for(EmiStack stack : ingredient.getEmiStacks())
                 {
                     if(stack != null && !stack.isEmpty())
                     {
-                        workstationMap.computeIfAbsent(stack, s -> new ArrayList<>()).addAll(entry.getValue());
+                        workstationMap.put(stack, deduplicatedList);
                     }
                 }
             }
