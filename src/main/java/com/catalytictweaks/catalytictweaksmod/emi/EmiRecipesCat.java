@@ -21,8 +21,10 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -196,24 +198,35 @@ public class EmiRecipesCat
         setupSafeLookup();
 
         List<EmiRecipe> recipes = (List<EmiRecipe>)RECIPES_FIELD.get(null);
-        if(recipes != null)
-        {
-            recipes.clear();
-            if(recipes instanceof ArrayList<?> arr) arr.trimToSize();
-        }
 
         Map<EmiRecipeCategory, List<EmiIngredient>> workstations = (Map<EmiRecipeCategory, List<EmiIngredient>>)WORKSTATIONS_FIELD.get(null);
 
         List<EmiRecipeCategory> categories = EmiRecipes.categories;
         List<Predicate<EmiRecipe>> invalidators = EmiRecipes.invalidators;
 
-        List<EmiRecipe> loadedRecipes = new ArrayList<>(EmiData.recipes.size());
-        for(var supplier : EmiData.recipes)
+        if(recipes != null)
         {
-            loadedRecipes.add((EmiRecipe) supplier.get());
+            for(var supplier : EmiData.recipes)
+            {
+                try
+                {
+                    EmiRecipe recipe = (EmiRecipe) supplier.get();
+                    if(recipe != null)
+                    {
+                        recipes.add(recipe);
+                    }
+                }
+                catch(Throwable t)
+                {
+                    LOGGER.error("Error loading EMI data recipe", t);
+                }
+            }
         }
-        recipes.addAll(loadedRecipes);
-        
+        else
+        {
+            recipes = new ArrayList<>();
+        }
+
         categories.sort((a, b) -> EmiRecipeCategoryProperties.getOrder(a) - EmiRecipeCategoryProperties.getOrder(b));
         invalidators.addAll(EmiData.recipeFilters);
         invalidators.add(EmiRecipesCat::isRecipeDisabled);
@@ -222,9 +235,10 @@ public class EmiRecipesCat
                                               .filter(EmiRecipesCat::isValidRecipe)
                                               .toList();
 
-        Map<EmiRecipeCategory, List<EmiIngredient>> filteredWorkstations = filterWorkstations(workstations);
+        Map<EmiRecipeCategory, List<EmiIngredient>> filteredWorkstations = filterWorkstations(workstations, categories);
 
         Map<EmiRecipeCategory, List<EmiRecipe>> byCategoryRaw = filteredRecipes.parallelStream()
+            .filter(recipe -> recipe.getCategory() != null)
             .collect(Collectors.groupingBy(EmiRecipe::getCategory));
 
         Map<ResourceLocation, EmiRecipe> byId = filteredRecipes.parallelStream()
@@ -233,7 +247,7 @@ public class EmiRecipesCat
                 EmiRecipe::getId,
                 recipe -> recipe, (existing, replacement) -> existing));
 
-        Map<EmiRecipeCategory, List<EmiRecipe>> byCategory = sortAndFreezeCategories(byCategoryRaw);
+        Map<EmiRecipeCategory, List<EmiRecipe>> byCategory = sortAndFreezeCategories(byCategoryRaw, categories);
 
         Hash.Strategy strategy = (Hash.Strategy)HASH_STRATEGY_CONSTRUCTOR.newInstance();
 
@@ -242,43 +256,66 @@ public class EmiRecipesCat
 
         filteredRecipes.parallelStream().forEach(recipe -> {
             List<EmiIngredient> inputs = recipe.getInputs();
-            for(int i = 0; i < inputs.size(); i++)
+            if(inputs != null)
             {
-                List<EmiStack> stacks = inputs.get(i).getEmiStacks();
-                for(int s = 0; s < stacks.size(); s++)
+                for(int i = 0; i < inputs.size(); i++)
                 {
-                    EmiStack stack = stacks.get(s);
-                    if(stack != null && !stack.isEmpty())
+                    EmiIngredient ingredient = inputs.get(i);
+                    if(ingredient != null)
                     {
-                        StrategyWrapper wrapper = new StrategyWrapper(stack, strategy);
-                        inputAccumulator.computeIfAbsent(wrapper, NEW_KEY_SET_FUNC).add(recipe);
+                        List<EmiStack> stacks = ingredient.getEmiStacks();
+                        if(stacks != null)
+                        {
+                            for(int s = 0; s < stacks.size(); s++)
+                            {
+                                EmiStack stack = stacks.get(s);
+                                if(stack != null && !stack.isEmpty())
+                                {
+                                    StrategyWrapper wrapper = new StrategyWrapper(stack, strategy);
+                                    inputAccumulator.computeIfAbsent(wrapper, NEW_KEY_SET_FUNC).add(recipe);
+                                }
+                            }
+                        }
                     }
                 }
             }
 
             List<EmiIngredient> catalysts = recipe.getCatalysts();
-            for(int i = 0; i < catalysts.size(); i++)
+            if(catalysts != null)
             {
-                List<EmiStack> stacks = catalysts.get(i).getEmiStacks();
-                for(int s = 0; s < stacks.size(); s++)
+                for(int i = 0; i < catalysts.size(); i++)
                 {
-                    EmiStack stack = stacks.get(s);
-                    if(stack != null && !stack.isEmpty())
+                    EmiIngredient catalyst = catalysts.get(i);
+                    if(catalyst != null)
                     {
-                        StrategyWrapper wrapper = new StrategyWrapper(stack, strategy);
-                        inputAccumulator.computeIfAbsent(wrapper, NEW_KEY_SET_FUNC).add(recipe);
+                        List<EmiStack> stacks = catalyst.getEmiStacks();
+                        if(stacks != null)
+                        {
+                            for(int s = 0; s < stacks.size(); s++)
+                            {
+                                EmiStack stack = stacks.get(s);
+                                if(stack != null && !stack.isEmpty())
+                                {
+                                    StrategyWrapper wrapper = new StrategyWrapper(stack, strategy);
+                                    inputAccumulator.computeIfAbsent(wrapper, NEW_KEY_SET_FUNC).add(recipe);
+                                }
+                            }
+                        }
                     }
                 }
             }
 
             List<EmiStack> outputs = recipe.getOutputs();
-            for(int i = 0; i < outputs.size(); i++)
+            if(outputs != null)
             {
-                EmiStack stack = outputs.get(i);
-                if(stack != null && !stack.isEmpty())
+                for(int i = 0; i < outputs.size(); i++)
                 {
-                    StrategyWrapper wrapper = new StrategyWrapper(stack, strategy);
-                    outputAccumulator.computeIfAbsent(wrapper, NEW_KEY_SET_FUNC).add(recipe);
+                    EmiStack stack = outputs.get(i);
+                    if(stack != null && !stack.isEmpty())
+                    {
+                        StrategyWrapper wrapper = new StrategyWrapper(stack, strategy);
+                        outputAccumulator.computeIfAbsent(wrapper, NEW_KEY_SET_FUNC).add(recipe);
+                    }
                 }
             }
         });
@@ -322,41 +359,60 @@ public class EmiRecipesCat
     private static void setupSafeLookup() throws Exception
     {
         Map<String, Boolean> originalLookup = (Map<String, Boolean>)DISABLED_FILTER_LOOKUP_FIELD.get(null);
-        ConcurrentHashMap<String, Boolean> safeLookup = new ConcurrentHashMap<>(originalLookup);
-        DISABLED_FILTER_LOOKUP_FIELD.set(null, safeLookup);
+        if(originalLookup != null)
+        {
+            ConcurrentHashMap<String, Boolean> safeLookup = new ConcurrentHashMap<>(originalLookup);
+            DISABLED_FILTER_LOOKUP_FIELD.set(null, safeLookup);
+        }
     }
 
     private static boolean isRecipeDisabled(EmiRecipe r)
     {
-        for(EmiIngredient i : r.getInputs())
+        if(r == null) return true;
+
+        List<EmiIngredient> inputs = r.getInputs();
+        if(inputs != null)
         {
-            if(EmiHidden.isDisabled(i))
+            for(EmiIngredient i : inputs)
             {
-                return true; 
-            }  
+                if(i != null && EmiHidden.isDisabled(i))
+                {
+                    return true; 
+                }  
+            }
         }
 
-        for(EmiIngredient i : r.getOutputs())
+        List<EmiStack> outputs = r.getOutputs();
+        if(outputs != null)
         {
-            if(EmiHidden.isDisabled(i))
+            for(EmiIngredient i : outputs)
             {
-                return true; 
-            }  
+                if(i != null && EmiHidden.isDisabled(i))
+                {
+                    return true; 
+                }  
+            }
         }
-        
-        for(EmiIngredient i : r.getCatalysts())
+
+        List<EmiIngredient> catalysts = r.getCatalysts();
+        if(catalysts != null)
         {
-            if(EmiHidden.isDisabled(i))
+            for(EmiIngredient i : catalysts)
             {
-                return true; 
-            }  
+                if(i != null && EmiHidden.isDisabled(i))
+                {
+                    return true; 
+                }  
+            }
         }
-        
+
         return false;
     }
 
     private static boolean isValidRecipe(EmiRecipe r)
     {
+        if(r == null) return false;
+        
         for(Predicate<EmiRecipe> predicate : EmiRecipes.invalidators)
         {
             if(predicate.test(r))
@@ -367,33 +423,77 @@ public class EmiRecipesCat
         return true;
     }
 
-    private static Map<EmiRecipeCategory, List<EmiIngredient>> filterWorkstations(Map<EmiRecipeCategory, List<EmiIngredient>> workstations)
+    private static Map<EmiRecipeCategory, List<EmiIngredient>> filterWorkstations(
+        Map<EmiRecipeCategory, List<EmiIngredient>> workstations,
+        List<EmiRecipeCategory> categories)
     {
-        Map<EmiRecipeCategory, List<EmiIngredient>> filteredWorkstations = new ConcurrentHashMap<>(workstations.size());
+        if(workstations == null || workstations.isEmpty())
+        {
+            return Collections.emptyMap();
+        }
+
+        Map<EmiRecipeCategory, List<EmiIngredient>> temp = new ConcurrentHashMap<>(workstations.size());
+
         workstations.entrySet().parallelStream().forEach(entry -> {
-            List<EmiIngredient> w = entry.getValue().stream().filter(s -> !EmiHidden.isDisabled(s)).toList();
-            if(!w.isEmpty())
+            if(entry.getKey() != null && entry.getValue() != null)
             {
-                filteredWorkstations.put(entry.getKey(), w);
+                List<EmiIngredient> w = entry.getValue().stream()
+                    .filter(s -> s != null && !EmiHidden.isDisabled(s))
+                    .toList();
+                if(!w.isEmpty())
+                {
+                    temp.put(entry.getKey(), w);
+                }
             }
         });
-        return filteredWorkstations;
+
+        // Ensamblado en LinkedHashMap manteniendo el orden definido por 'categories'
+        Map<EmiRecipeCategory, List<EmiIngredient>> filteredWorkstations = new LinkedHashMap<>();
+        for(EmiRecipeCategory cat : categories)
+        {
+            List<EmiIngredient> ingredients = temp.get(cat);
+            if(ingredients != null)
+            {
+                filteredWorkstations.put(cat, ingredients);
+            }
+        }
+
+        temp.forEach((cat, ing) -> filteredWorkstations.putIfAbsent(cat, ing));
+
+        return Collections.unmodifiableMap(filteredWorkstations);
     }
 
-    private static Map<EmiRecipeCategory, List<EmiRecipe>> sortAndFreezeCategories(Map<EmiRecipeCategory, List<EmiRecipe>> byCategoryRaw)
+    private static Map<EmiRecipeCategory, List<EmiRecipe>> sortAndFreezeCategories(
+        Map<EmiRecipeCategory, List<EmiRecipe>> byCategoryRaw,
+        List<EmiRecipeCategory> categories)
     {
-        Map<EmiRecipeCategory, List<EmiRecipe>> byCategory = new ConcurrentHashMap<>(byCategoryRaw.size());
+        Map<EmiRecipeCategory, List<EmiRecipe>> sortedPerCategory = new ConcurrentHashMap<>(byCategoryRaw.size());
+
         byCategoryRaw.entrySet().parallelStream().forEach(entry -> {
             EmiRecipeCategory cat = entry.getKey();
             List<EmiRecipe> cRecipes = entry.getValue();
             Comparator<EmiRecipe> sort = EmiRecipeCategoryProperties.getSort(cat);
             if(sort != EmiRecipeSorting.none())
             {
-                cRecipes = cRecipes.stream().sorted(sort).collect(Collectors.toList());
+                cRecipes = cRecipes.stream().sorted(sort).toList();
             }
-            byCategory.put(cat, List.copyOf(cRecipes));
+            sortedPerCategory.put(cat, List.copyOf(cRecipes));
         });
-        return byCategory;
+
+        // Ensamblado en LinkedHashMap garantizando la secuencia de pestañas de EMI
+        Map<EmiRecipeCategory, List<EmiRecipe>> byCategory = new LinkedHashMap<>();
+        for(EmiRecipeCategory cat : categories)
+        {
+            List<EmiRecipe> cRecipes = sortedPerCategory.get(cat);
+            if(cRecipes != null)
+            {
+                byCategory.put(cat, cRecipes);
+            }
+        }
+
+        sortedPerCategory.forEach((cat, list) -> byCategory.putIfAbsent(cat, list));
+
+        return Collections.unmodifiableMap(byCategory);
     }
 
     private static void populateWorkstationMap(
@@ -401,7 +501,8 @@ public class EmiRecipesCat
         Map<EmiRecipeCategory, List<EmiIngredient>> filteredWorkstations)
     {
         Map<EmiStack, List<EmiRecipe>> workstationMap = EmiRecipes.byWorkstation;
-        
+        if (workstationMap == null) return;
+
         Map<List<EmiRecipe>, List<EmiRecipe>> listInterner = new HashMap<>();
 
         for(Map.Entry<EmiRecipeCategory, List<EmiRecipe>> entry : byCategory.entrySet())
@@ -418,7 +519,10 @@ public class EmiRecipesCat
 
             for(EmiIngredient ingredient : ingredients)
             {
-                for(EmiStack stack : ingredient.getEmiStacks())
+                if (ingredient == null) continue;
+                List<EmiStack> stacks = ingredient.getEmiStacks();
+                if (stacks == null) continue;
+                for(EmiStack stack : stacks)
                 {
                     if(stack != null && !stack.isEmpty())
                     {

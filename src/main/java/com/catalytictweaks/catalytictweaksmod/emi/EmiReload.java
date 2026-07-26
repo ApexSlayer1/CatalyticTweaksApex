@@ -32,12 +32,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -138,31 +138,56 @@ public class EmiReload
                 timings.put("Plugin collection", System.currentTimeMillis() - phaseStart);
                 totalPlugins = plugins.size();
 
-                EmiInitRegistry initRegistry = new EmiInitRegistryImpl();
+                EmiInitRegistry rawInitRegistry = new EmiInitRegistryImpl();
+                EmiInitRegistry initRegistry = (EmiInitRegistry) Proxy.newProxyInstance(
+                    EmiInitRegistry.class.getClassLoader(),
+                    new Class<?>[]{EmiInitRegistry.class},
+                    (proxy, method, args) -> {
+                        synchronized(rawInitRegistry)
+                        {
+                            return method.invoke(rawInitRegistry, args);
+                        }
+                    }
+                );
+
                 long initPhaseStart = System.currentTimeMillis();
-                
+                AtomicInteger failedInitCount = new AtomicInteger(0);
+
+                ExecutorService initExecutor = Executors.newFixedThreadPool(
+                    Runtime.getRuntime().availableProcessors(),
+                    r -> {
+                        Thread t = new Thread(r);
+                        t.setName("EMI-Plugin-Initializer-" + t.threadId());
+                        t.setDaemon(true);
+                        t.setContextClassLoader(Thread.currentThread().getContextClassLoader());
+                        return t;
+                    }
+                );
+
+                List<CompletableFuture<Void>> initFutures = new ArrayList<>();
                 for(EmiPluginContainer container : plugins)
                 {
-                    phaseStart = System.currentTimeMillis();
-                    EmiReloadManager.step(EmiPort.literal("Initializing plugin from " + container.id()), 1000L);
-                    try
-                    {
-                        container.plugin().initialize(initRegistry);
-                    }
-                    catch(Throwable e)
-                    {
-                        failedInit++;
-                        EmiReloadLog.warn("Exception initializing plugin provided by " + container.id(), e);
-                        if(restart)
+                    initFutures.add(CompletableFuture.runAsync(() -> {
+                        long pStart = System.currentTimeMillis();
+                        EmiReloadManager.step(EmiPort.literal("Initializing plugin from " + container.id()), 1000L);
+                        try
                         {
-                            shouldRestart = true;
-                            break;
+                            container.plugin().initialize(initRegistry);
                         }
-                        continue;
-                    }
-                    LOGGER.info("Initialized plugin " + container.id() + " in " + (System.currentTimeMillis() - phaseStart) + "ms");
-                    Thread.yield();
+                        catch(Throwable e)
+                        {
+                            failedInitCount.incrementAndGet();
+                            EmiReloadLog.warn("Exception initializing plugin provided by " + container.id(), e);
+                        }
+                        LOGGER.info("Initialized plugin " + container.id() + " in " + (System.currentTimeMillis() - pStart) + "ms");
+                        Thread.yield();
+                    }, initExecutor));
                 }
+
+                CompletableFuture.allOf(initFutures.toArray(new CompletableFuture[0])).join();
+                initExecutor.shutdown();
+
+                failedInit = failedInitCount.get();
                 timings.put("Plugin initialization", System.currentTimeMillis() - initPhaseStart);
 
                 if(shouldRestart || restart)
@@ -194,11 +219,11 @@ public class EmiReload
                     continue;
                 }
 
-                ConcurrentEmiRegistry registry = new ConcurrentEmiRegistry(new EmiRegistryImpl());
+                EmiRegistryImpl realRegistry = new EmiRegistryImpl();
 
                 // List<EmiPluginContainer> phase1Core = new ArrayList<>();
                 List<EmiPluginContainer> phase2Parallel = new ArrayList<>();
-                List<EmiPluginContainer> phase3Sequential = new ArrayList<>();
+                // List<EmiPluginContainer> phase3Sequential = new ArrayList<>();
 
                 for(EmiPluginContainer container : plugins)
                 {
@@ -214,32 +239,14 @@ public class EmiReload
                     // }
                 }
 
+                ConcurrentEmiRegistry[] pluginRegistries = new ConcurrentEmiRegistry[phase2Parallel.size()];
+                for(int i = 0; i < phase2Parallel.size(); i++)
+                {
+                    pluginRegistries[i] = new ConcurrentEmiRegistry(realRegistry);
+                }
+
                 AtomicInteger failedCount = new AtomicInteger(0);
                 AtomicBoolean threadRestart = new AtomicBoolean(false);
-
-                Consumer<EmiPluginContainer> loadPlugin = (container) ->
-                {
-                    long phaseStartInner = System.currentTimeMillis();
-                    EmiReloadManager.step(EmiPort.literal("Loading plugin from " + container.id()), 2000L);
-                    
-                    try
-                    {
-                        container.plugin().register(registry);
-                    }
-                    catch(Throwable e)
-                    {
-                        failedCount.incrementAndGet();
-                        LOGGER.error("Exception loading plugin provided by {}: {}", container.id(), e.getMessage(), e);
-                        if(restart)
-                        {
-                            threadRestart.set(true);
-                        }
-                    }
-
-                    long elapsed = System.currentTimeMillis() - phaseStartInner;
-                    LOGGER.info("Loaded plugin {} in {}ms", container.id(), elapsed);
-                    Thread.yield();
-                };
 
                 // for(EmiPluginContainer container : phase1Core)
                 // {
@@ -265,28 +272,54 @@ public class EmiReload
                     );
                     List<CompletableFuture<Void>> futures = new ArrayList<>();
 
-                    for(EmiPluginContainer container : phase2Parallel)
+                    for(int i = 0; i < phase2Parallel.size(); i++)
                     {
-                        futures.add(CompletableFuture.runAsync(() -> loadPlugin.accept(container), executor));
+                        final int index = i;
+                        EmiPluginContainer container = phase2Parallel.get(index);
+                        futures.add(CompletableFuture.runAsync(() -> {
+                            long phaseStartInner = System.currentTimeMillis();
+                            EmiReloadManager.step(EmiPort.literal("Loading plugin from " + container.id()), 2000L);
+                            
+                            try
+                            {
+                                container.plugin().register(pluginRegistries[index]);
+                            }
+                            catch(Throwable e)
+                            {
+                                failedCount.incrementAndGet();
+                                LOGGER.error("Exception loading plugin provided by {}: {}", container.id(), e.getMessage(), e);
+                                if(restart)
+                                {
+                                    threadRestart.set(true);
+                                }
+                            }
+
+                            long elapsed = System.currentTimeMillis() - phaseStartInner;
+                            LOGGER.info("Loaded plugin {} in {}ms", container.id(), elapsed);
+                            Thread.yield();
+                        }, executor));
                     }
 
                     CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
                     executor.shutdown();
                 }
 
-                if(!threadRestart.get() && !restart)
+                for(int i = 0; i < phase2Parallel.size(); i++)
                 {
-                    for(EmiPluginContainer container : phase3Sequential)
-                    {
-                        loadPlugin.accept(container);
-                        if(threadRestart.get() || restart)
-                        {
-                            break;
-                        }
-                    }
+                    pluginRegistries[i].flushTo(realRegistry);
                 }
 
-                registry.flush();
+                // if(!threadRestart.get() && !restart)
+                // {
+                //     for(EmiPluginContainer container : phase3Sequential)
+                //     {
+                //         loadPlugin.accept(container);
+                //         if(threadRestart.get() || restart)
+                //         {
+                //             break;
+                //         }
+                //     }
+                // }
                 
                 timings.put("Plugin registration", System.currentTimeMillis() - regPhaseStart);
                 failedReg = failedCount.get();
@@ -316,8 +349,7 @@ public class EmiReload
 
                 phaseStart = System.currentTimeMillis();
                 EmiReloadManager.step(EmiPort.literal("Registering late recipes"), 2000L);
-                Objects.requireNonNull(registry);
-                Consumer<EmiRecipe> registerLateRecipe = registry::addRecipe;
+                Consumer<EmiRecipe> registerLateRecipe = realRegistry::addRecipe;
                 
                 for(Consumer<Consumer<EmiRecipe>> consumer : EmiRecipes.lateRecipes)
                 {

@@ -34,13 +34,21 @@ public class ConcurrentEmiRegistry implements EmiRegistry
         this.delegate = delegate;
     }
 
-    public void flush()
+    public void flushTo(EmiRegistry target)
     {
         this.buffering = false;
         Consumer<EmiRegistry> action;
         while((action = actions.poll()) != null)
         {
-            action.accept(delegate);
+            action.accept(target);
+        }
+    }
+
+    public void flush()
+    {
+        if(delegate != null)
+        {
+            flushTo(delegate);
         }
     }
 
