@@ -114,29 +114,103 @@ public class EmiRecipesCat
 
     private static class StrategyWrapper
     {
+        private static final ThreadLocal<Boolean> RECURSION_GUARD = ThreadLocal.withInitial(() -> Boolean.FALSE);
+
         final EmiStack stack;
         final Hash.Strategy strategy;
+        private final int cachedHash;
 
         StrategyWrapper(EmiStack stack, Hash.Strategy strategy)
         {
             this.stack = stack;
             this.strategy = strategy;
+            this.cachedHash = computeHash(stack, strategy);
+        }
+
+        private static int computeHash(EmiStack stack, Hash.Strategy strategy)
+        {
+            if(stack == null || stack.isEmpty())
+            {
+                return 0;
+            }
+
+            if(RECURSION_GUARD.get())
+            {
+                return System.identityHashCode(stack);
+            }
+
+            try
+            {
+                RECURSION_GUARD.set(Boolean.TRUE);
+                return strategy.hashCode(stack);
+            }
+            catch(Throwable t)
+            {
+                return stack.getKey().hashCode();
+            }
+            finally
+            {
+                RECURSION_GUARD.set(Boolean.FALSE);
+            }
         }
 
         @Override
         public int hashCode()
         {
-            return strategy.hashCode(stack);
+            return this.cachedHash;
         }
 
         @Override
         public boolean equals(Object obj)
         {
             if(this == obj)
+            {
                 return true;
+            }
+
             if(!(obj instanceof StrategyWrapper other))
+            {
                 return false;
-            return strategy.equals(this.stack, other.stack);
+            }
+
+            if(this.stack == other.stack)
+            {
+                return true;
+            }
+
+            if(this.stack == null || other.stack == null)
+            {
+                return false;
+            }
+
+            if(this.cachedHash != other.cachedHash)
+            {
+                return false;
+            }
+
+            if(!this.stack.getKey().equals(other.stack.getKey()))
+            {
+                return false;
+            }
+
+            if(RECURSION_GUARD.get())
+            {
+                return this.stack.equals(other.stack);
+            }
+
+            try
+            {
+                RECURSION_GUARD.set(Boolean.TRUE);
+                return strategy.equals(this.stack, other.stack);
+            }
+            catch(Throwable t)
+            {
+                return this.stack.isEqual(other.stack);
+            }
+            finally
+            {
+                RECURSION_GUARD.set(Boolean.FALSE);
+            }
         }
     }
 
@@ -255,52 +329,21 @@ public class EmiRecipesCat
         Map<StrategyWrapper, Set<EmiRecipe>> outputAccumulator = new ConcurrentHashMap<>(32768);
 
         filteredRecipes.parallelStream().forEach(recipe -> {
-            List<EmiIngredient> inputs = recipe.getInputs();
-            if(inputs != null)
+            List<EmiIngredient>[] ingredientGroups = new List[]{ recipe.getInputs(), recipe.getCatalysts() };
+            for(List<EmiIngredient> group : ingredientGroups)
             {
-                for(int i = 0; i < inputs.size(); i++)
+                if(group == null) continue;
+                for(EmiIngredient ingredient : group)
                 {
-                    EmiIngredient ingredient = inputs.get(i);
-                    if(ingredient != null)
-                    {
-                        List<EmiStack> stacks = ingredient.getEmiStacks();
-                        if(stacks != null)
-                        {
-                            for(int s = 0; s < stacks.size(); s++)
-                            {
-                                EmiStack stack = stacks.get(s);
-                                if(stack != null && !stack.isEmpty())
-                                {
-                                    StrategyWrapper wrapper = new StrategyWrapper(stack, strategy);
-                                    inputAccumulator.computeIfAbsent(wrapper, NEW_KEY_SET_FUNC).add(recipe);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+                    if(ingredient == null) continue;
 
-            List<EmiIngredient> catalysts = recipe.getCatalysts();
-            if(catalysts != null)
-            {
-                for(int i = 0; i < catalysts.size(); i++)
-                {
-                    EmiIngredient catalyst = catalysts.get(i);
-                    if(catalyst != null)
+                    List<EmiStack> stacks = ingredient.getEmiStacks();
+                    if(stacks == null) continue;
+
+                    for(EmiStack stack : stacks)
                     {
-                        List<EmiStack> stacks = catalyst.getEmiStacks();
-                        if(stacks != null)
-                        {
-                            for(int s = 0; s < stacks.size(); s++)
-                            {
-                                EmiStack stack = stacks.get(s);
-                                if(stack != null && !stack.isEmpty())
-                                {
-                                    StrategyWrapper wrapper = new StrategyWrapper(stack, strategy);
-                                    inputAccumulator.computeIfAbsent(wrapper, NEW_KEY_SET_FUNC).add(recipe);
-                                }
-                            }
-                        }
+                        if(stack == null || stack.isEmpty()) continue;
+                        inputAccumulator.computeIfAbsent(new StrategyWrapper(stack, strategy), NEW_KEY_SET_FUNC).add(recipe);
                     }
                 }
             }
@@ -308,14 +351,10 @@ public class EmiRecipesCat
             List<EmiStack> outputs = recipe.getOutputs();
             if(outputs != null)
             {
-                for(int i = 0; i < outputs.size(); i++)
+                for(EmiStack stack : outputs)
                 {
-                    EmiStack stack = outputs.get(i);
-                    if(stack != null && !stack.isEmpty())
-                    {
-                        StrategyWrapper wrapper = new StrategyWrapper(stack, strategy);
-                        outputAccumulator.computeIfAbsent(wrapper, NEW_KEY_SET_FUNC).add(recipe);
-                    }
+                    if(stack == null || stack.isEmpty()) continue;
+                    outputAccumulator.computeIfAbsent(new StrategyWrapper(stack, strategy), NEW_KEY_SET_FUNC).add(recipe);
                 }
             }
         });
@@ -440,6 +479,7 @@ public class EmiRecipesCat
                 List<EmiIngredient> w = entry.getValue().stream()
                     .filter(s -> s != null && !EmiHidden.isDisabled(s))
                     .toList();
+
                 if(!w.isEmpty())
                 {
                     temp.put(entry.getKey(), w);
@@ -447,7 +487,6 @@ public class EmiRecipesCat
             }
         });
 
-        // Ensamblado en LinkedHashMap manteniendo el orden definido por 'categories'
         Map<EmiRecipeCategory, List<EmiIngredient>> filteredWorkstations = new LinkedHashMap<>();
         for(EmiRecipeCategory cat : categories)
         {
@@ -480,7 +519,6 @@ public class EmiRecipesCat
             sortedPerCategory.put(cat, List.copyOf(cRecipes));
         });
 
-        // Ensamblado en LinkedHashMap garantizando la secuencia de pestañas de EMI
         Map<EmiRecipeCategory, List<EmiRecipe>> byCategory = new LinkedHashMap<>();
         for(EmiRecipeCategory cat : categories)
         {

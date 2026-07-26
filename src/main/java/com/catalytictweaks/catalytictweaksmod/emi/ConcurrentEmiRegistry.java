@@ -44,14 +44,6 @@ public class ConcurrentEmiRegistry implements EmiRegistry
         }
     }
 
-    public void flush()
-    {
-        if(delegate != null)
-        {
-            flushTo(delegate);
-        }
-    }
-
     public EmiRegistry getRegistry()
     {
         return this;

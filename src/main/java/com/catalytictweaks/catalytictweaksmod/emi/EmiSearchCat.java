@@ -37,7 +37,6 @@ public class EmiSearchCat
 {
     private static final Logger LOGGER = LoggerFactory.getLogger("CatalyticTweaks/EmiSearchCat");
     private static final Map<String, String> MOD_NAME_CACHE = new ConcurrentHashMap<>(512);
-    // Caché crítico para deducir palabras repetitivas en tooltips y salvar RAM/GC
     private static final Map<String, String> TOKEN_CACHE = new ConcurrentHashMap<>(65536);
 
     static
@@ -92,7 +91,6 @@ public class EmiSearchCat
         boolean old = EmiConfig.appendItemModId;
         EmiConfig.appendItemModId = false;
 
-        // Limpiamos el caché en cada bake para evitar fugas de memoria
         TOKEN_CACHE.clear();
 
         ClassLoader modClassLoader = Thread.currentThread().getContextClassLoader();
@@ -411,6 +409,7 @@ public class EmiSearchCat
             {
                 continue;
             }
+            
             for(Component text : alias.text())
             {
                 if(text == null)
