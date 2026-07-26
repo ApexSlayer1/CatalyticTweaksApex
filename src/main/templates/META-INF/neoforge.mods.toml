@@ -23,7 +23,7 @@ license="MIT"
 modId="catalytictweaks" #mandatory
 
 # The version number of the mod
-version="1.0.18" #mandatory
+version="1.0.19" #mandatory
 
 # A display name for the mod
 displayName="Catalytic Tweaks" #mandatory
