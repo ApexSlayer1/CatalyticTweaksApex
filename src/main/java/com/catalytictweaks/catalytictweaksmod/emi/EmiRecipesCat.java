@@ -23,7 +23,6 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -539,9 +538,7 @@ public class EmiRecipesCat
         Map<EmiRecipeCategory, List<EmiIngredient>> filteredWorkstations)
     {
         Map<EmiStack, List<EmiRecipe>> workstationMap = EmiRecipes.byWorkstation;
-        if (workstationMap == null) return;
-
-        Map<List<EmiRecipe>, List<EmiRecipe>> listInterner = new HashMap<>();
+        if(workstationMap == null) return;
 
         for(Map.Entry<EmiRecipeCategory, List<EmiRecipe>> entry : byCategory.entrySet())
         {
@@ -551,9 +548,7 @@ public class EmiRecipesCat
                 continue;
             }
 
-            List<EmiRecipe> deduplicatedList = listInterner.computeIfAbsent(
-                List.copyOf(entry.getValue()), k -> k
-            );
+            List<EmiRecipe> categoryRecipes = entry.getValue();
 
             for(EmiIngredient ingredient : ingredients)
             {
@@ -564,10 +559,12 @@ public class EmiRecipesCat
                 {
                     if(stack != null && !stack.isEmpty())
                     {
-                        workstationMap.put(stack, deduplicatedList);
+                        workstationMap.computeIfAbsent(stack, k -> new ArrayList<>()).addAll(categoryRecipes);
                     }
                 }
             }
         }
+
+        workstationMap.replaceAll((stack, list) -> List.copyOf(list));
     }
 }

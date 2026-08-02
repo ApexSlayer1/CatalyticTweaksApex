@@ -122,7 +122,7 @@ dependencies
     //Needed for compile only
 
     //MMR
-    compileOnly localRuntime("curse.maven:modular-machinery-reborn-1083840:8340236")
+    compileOnly localRuntime("curse.maven:modular-machinery-reborn-1083840:8450758")
     compileOnly localRuntime("curse.maven:modular-machinery-reborn-mekanism-1131856:7731276")
     compileOnly localRuntime("curse.maven:experiencelib-1156551:7705470")
     compileOnly localRuntime("curse.maven:ldlib-626676:8108634")
@@ -137,7 +137,7 @@ dependencies
 
     //Recipe viewers
     compileOnly localRuntime("curse.maven:emi-580555:6420931")
-    compileOnly localRuntime("curse.maven:jei-238222:7420587")
+    compileOnly localRuntime("curse.maven:jei-238222:8555356")
 
     //Pipez
     compileOnly localRuntime("curse.maven:pipez-443900:5609056")
