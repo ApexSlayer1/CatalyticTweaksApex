@@ -44,6 +44,7 @@
     "sfml.ProgramEditorColorsMixin",
     "kjs.MixinKubeJSCommands",
     "kjs.BuilderBaseMixin",
+    "kjs.KubeJSWebMixin",
     "au.CancelEarlyAUMixin",
     "au.TriggerLateAUMixin",
     "ma.CruxRecipeMixin"
