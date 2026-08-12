@@ -31,8 +31,8 @@ public class RecipeFinder
     private static RecipeManager last_recipe_manager = null;
 
     /**
-     * Interfaz puente para permitir al depurador acceder y modificar
-     * el estado interno del Mixin de forma transparente.
+     * Interface to allow as bridge, so you can use the debugger to
+     * change and access the mixin status as clear as possible
      */
     public interface Context
     {

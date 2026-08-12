@@ -139,8 +139,8 @@ dependencies
     compileOnly localRuntime("curse.maven:athena-841890:8061947")
 
     //KJS
-    compileOnly localRuntime("curse.maven:kubejs-238086:7278501")
-    compileOnly localRuntime("curse.maven:rhino-416294:7104526")
+    compileOnly localRuntime("curse.maven:kubejs-238086:8083208")
+    compileOnly localRuntime("curse.maven:rhino-416294:8463898")
     compileOnly("dev.latvian.apps:tiny-java-server:1.0.0-build.33")
 
     //Recipe viewers
